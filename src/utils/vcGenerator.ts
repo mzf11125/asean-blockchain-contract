@@ -1,22 +1,27 @@
-
-import { createVerifiableCredentialJwt, JwtCredentialPayload } from 'did-jwt-vc';
-import { EthrDID } from 'ethr-did';
-import { Resolver } from 'did-resolver';
-import { getResolver } from 'ethr-did-resolver';
+import {
+  createVerifiableCredentialJwt,
+  JwtCredentialPayload,
+} from "did-jwt-vc";
+import { EthrDID } from "ethr-did";
+import { Resolver } from "did-resolver";
+import { getResolver } from "ethr-did-resolver";
 
 // Mock DID configuration - in production, these would be proper organizational DIDs
-const ISSUER_DID = 'did:ethr:0x1234567890abcdef1234567890abcdef12345678';
-const ISSUER_PRIVATE_KEY = '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab';
+const ISSUER_DID = "did:ethr:0x1234567890abcdef1234567890abcdef12345678";
+const ISSUER_PRIVATE_KEY =
+  "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab";
 
 // Configure DID resolver
-const resolver = new Resolver(getResolver({
-  networks: [
-    {
-      name: 'mainnet',
-      rpcUrl: 'https://mainnet.infura.io/v3/your-project-id'
-    }
-  ]
-}));
+const resolver = new Resolver(
+  getResolver({
+    networks: [
+      {
+        name: "mainnet",
+        rpcUrl: "https://mainnet.infura.io/v3/your-project-id",
+      },
+    ],
+  })
+);
 
 export interface ContractCredentialSubject {
   id: string;
@@ -48,7 +53,7 @@ export interface ContractCredentialSubject {
 }
 
 export interface ContractVerifiableCredential {
-  '@context': string[];
+  "@context": string[];
   type: string[];
   issuer: string;
   issuanceDate: string;
@@ -59,86 +64,97 @@ export interface ContractVerifiableCredential {
 export const generateContractVC = async (
   contractData: any,
   ipfsCID: string,
-  blockchainAnchor?: { transactionHash: string; blockNumber: number; network: string }
+  blockchainAnchor?: {
+    transactionHash: string;
+    blockNumber: number;
+    network: string;
+  }
 ): Promise<ContractVerifiableCredential> => {
   const credentialSubject: ContractCredentialSubject = {
     id: `urn:uuid:${contractData.id}`,
-    contractType: contractData.contractType || 'Supply Agreement',
-    jurisdiction: contractData.jurisdiction || 'ASEAN Cross-Border',
+    contractType: contractData.contractType || "Supply Agreement",
+    jurisdiction: contractData.jurisdiction || "ASEAN Cross-Border",
     parties: contractData.parties.map((party: string, index: number) => ({
       name: party,
       did: `did:ethr:0x${Math.random().toString(16).substr(2, 40)}`, // Mock DID
-      role: index === 0 ? 'supplier' : 'buyer'
+      role: index === 0 ? "supplier" : "buyer",
     })),
     keyTerms: contractData.keyTerms || {},
     complianceFlags: contractData.complianceFlags || {
       aseanFTA: true,
       exportLicense: true,
-      qualityStandards: 'ISO 9001'
+      qualityStandards: "ISO 9001",
     },
     ipfsCID,
     blockchainAnchor,
-    ocrExtraction: contractData.ocrResults || []
+    ocrExtraction: contractData.ocrResults || [],
   };
 
   const vcPayload: JwtCredentialPayload = {
     sub: credentialSubject.id,
     vc: {
-      '@context': [
-        'https://www.w3.org/2018/credentials/v1',
-        'https://w3id.org/security/suites/ed25519-2020/v1',
-        'https://schema.asean.org/contract/v1'
+      "@context": [
+        "https://www.w3.org/2018/credentials/v1",
+        "https://w3id.org/security/suites/ed25519-2020/v1",
+        "https://schema.asean.org/contract/v1",
       ],
-      type: ['VerifiableCredential', 'ASEANContractCredential'],
-      credentialSubject
-    }
+      type: ["VerifiableCredential", "ASEANContractCredential"],
+      credentialSubject,
+    },
   };
 
   try {
-    // Create issuer DID (mock for now)
-    const issuer = new EthrDID({
-      identifier: ISSUER_DID.split(':')[2],
-      privateKey: ISSUER_PRIVATE_KEY
+    // Create issuer DID
+    const ethrDid = new EthrDID({
+      identifier: ISSUER_DID.split(":")[2],
+      privateKey: ISSUER_PRIVATE_KEY,
     });
+
+    // Create the issuer object with the required signer property
+    const issuer = {
+      did: ISSUER_DID,
+      signer: ethrDid.signer,
+      alg: "ES256K",
+    };
 
     // Create and sign the VC using the correct function name
     const vcJwt = await createVerifiableCredentialJwt(vcPayload, issuer);
-    
+
     // For display purposes, also return the decoded VC
     const vc: ContractVerifiableCredential = {
-      '@context': [
-        'https://www.w3.org/2018/credentials/v1',
-        'https://w3id.org/security/suites/ed25519-2020/v1',
-        'https://schema.asean.org/contract/v1'
+      "@context": [
+        "https://www.w3.org/2018/credentials/v1",
+        "https://w3id.org/security/suites/ed25519-2020/v1",
+        "https://schema.asean.org/contract/v1",
       ],
-      type: ['VerifiableCredential', 'ASEANContractCredential'],
+      type: ["VerifiableCredential", "ASEANContractCredential"],
       issuer: ISSUER_DID,
       issuanceDate: new Date().toISOString(),
       credentialSubject,
       proof: {
-        type: 'JwtProof2020',
+        type: "JwtProof2020",
         jwt: vcJwt,
         created: new Date().toISOString(),
-        proofPurpose: 'assertionMethod',
-        verificationMethod: `${ISSUER_DID}#controller`
-      }
+        proofPurpose: "assertionMethod",
+        verificationMethod: `${ISSUER_DID}#controller`,
+      },
     };
 
     return vc;
   } catch (error) {
-    console.error('Error generating VC:', error);
-    
+    console.error("Error generating VC:", error);
+
     // Fallback: return unsigned VC for demo purposes
     return {
-      '@context': [
-        'https://www.w3.org/2018/credentials/v1',
-        'https://w3id.org/security/suites/ed25519-2020/v1',
-        'https://schema.asean.org/contract/v1'
+      "@context": [
+        "https://www.w3.org/2018/credentials/v1",
+        "https://w3id.org/security/suites/ed25519-2020/v1",
+        "https://schema.asean.org/contract/v1",
       ],
-      type: ['VerifiableCredential', 'ASEANContractCredential'],
+      type: ["VerifiableCredential", "ASEANContractCredential"],
       issuer: ISSUER_DID,
       issuanceDate: new Date().toISOString(),
-      credentialSubject
+      credentialSubject,
     };
   }
 };
@@ -146,5 +162,5 @@ export const generateContractVC = async (
 export const hashVC = (vc: ContractVerifiableCredential): string => {
   // Create a deterministic hash of the VC for blockchain anchoring
   const vcString = JSON.stringify(vc, Object.keys(vc).sort());
-  return `0x${Buffer.from(vcString).toString('hex').slice(0, 64)}`;
+  return `0x${Buffer.from(vcString).toString("hex").slice(0, 64)}`;
 };
